@@ -1,13 +1,54 @@
 package oci
 
 import (
-	"fmt"
 	"syscall"
 	"unsafe"
 )
 
+const (
+	OCI_DEFAULT  = 0
+	OCI_THREADED = 1
+	OCI_OBJECT   = 2
+	OCI_EVENTS   = 4
+	OCI_SHARED   = 16
+
+	OCI_HTYPE_FIRST                = 1                 /* start value of handle type */
+	OCI_HTYPE_ENV                  = 1                 /* environment handle */
+	OCI_HTYPE_ERROR                = 2                 /* error handle */
+	OCI_HTYPE_SVCCTX               = 3                 /* service handle */
+	OCI_HTYPE_STMT                 = 4                 /* statement handle */
+	OCI_HTYPE_BIND                 = 5                 /* bind handle */
+	OCI_HTYPE_DEFINE               = 6                 /* define handle */
+	OCI_HTYPE_DESCRIBE             = 7                 /* describe handle */
+	OCI_HTYPE_SERVER               = 8                 /* server handle */
+	OCI_HTYPE_SESSION              = 9                 /* authentication handle */
+	OCI_HTYPE_AUTHINFO             = OCI_HTYPE_SESSION /* SessionGet auth handle */
+	OCI_HTYPE_TRANS                = 10                /* transaction handle */
+	OCI_HTYPE_COMPLEXOBJECT        = 11                /* complex object retrieval handle */
+	OCI_HTYPE_SECURITY             = 12                /* security handle */
+	OCI_HTYPE_SUBSCRIPTION         = 13                /* subscription handle */
+	OCI_HTYPE_DIRPATH_CTX          = 14                /* direct path context */
+	OCI_HTYPE_DIRPATH_COLUMN_ARRAY = 15                /* direct path column array */
+	OCI_HTYPE_DIRPATH_STREAM       = 16                /* direct path stream */
+	OCI_HTYPE_PROC                 = 17                /* process handle */
+	OCI_HTYPE_DIRPATH_FN_CTX       = 18                /* direct path function context */
+	OCI_HTYPE_DIRPATH_FN_COL_ARRAY = 19                /* dp object column array */
+	OCI_HTYPE_XADSESSION           = 20                /* access driver session */
+	OCI_HTYPE_XADTABLE             = 21                /* access driver table */
+	OCI_HTYPE_XADFIELD             = 22                /* access driver field */
+	OCI_HTYPE_XADGRANULE           = 23                /* access driver granule */
+	OCI_HTYPE_XADRECORD            = 24                /* access driver record */
+	OCI_HTYPE_XADIO                = 25                /* access driver I/O */
+	OCI_HTYPE_CPOOL                = 26                /* connection pool handle */
+	OCI_HTYPE_SPOOL                = 27                /* session pool handle */
+	OCI_HTYPE_ADMIN                = 28                /* admin handle */
+	OCI_HTYPE_EVENT                = 29                /* HA event handle */
+	OCI_HTYPE_LAST                 = 29                /* last value of a handle type */
+
+)
+
 var (
-	modoci = syscall.NewLazyDLL("oci.dll")
+	modoci = syscall.NewLazyDLL("C:\\Program Files\\Oracle\\instantclient_11_2\\oci.dll")
 
 	// Connect, authorize, and initialize
 	procOCIAppCtxClearAll        = modoci.NewProc("OCIAppCtxClearAll")        // Clear all attribute-value information in a namespace of an application context
@@ -229,40 +270,63 @@ var (
 	procOCITableSize   = modoci.NewProc("OCITableSize")   // Return current size of table
 )
 
-const OCI_DEFAULT = 0x00000000
-const OCI_THREADED = 0x00000001
-const OCI_OBJECT = 0x00000002
-const OCI_EVENTS = 0x00000004
-const OCI_SHARED = 0x00000010
-
-type OracleEnvironment struct {
-	ocienv *uint
+type OCIHandle struct {
+	h uintptr // Handle
+	t   uint  // Handle type
 }
 
-func ociEnvCreate() (oe *OracleEnvironment, err uint32) {
-	env := new(OracleEnvironment)
-
-	fmt.Println("ocienv", env.ocienv)
-	r0, r1, _ := procOCIEnvCreate.Call( // sword OCIEnvCreate   (
-		uintptr(unsafe.Pointer(env.ocienv)), // OCIEnv        **envhpp,
-		OCI_DEFAULT,                         // ub4           mode,
-		uintptr(0),                          // CONST dvoid   *ctxp,
-		uintptr(0),                          // CONST dvoid   *(*malocfp) (dvoid *ctxp, size_t size),
-		uintptr(0),                          // CONST dvoid   *(*ralocfp) (dvoid *ctxp, dvoid *memptr, size_t newsize),
-		uintptr(0),                          // CONST void    (*mfreefp) (dvoid *ctxp, dvoid *memptr))
-		uintptr(0),                          // size_t        xtramemsz,
-		uintptr(0))                          // dvoid         **usrmempp );
-
-	fmt.Println("r0", r0)
-	fmt.Println("r1", r1)
-	fmt.Println("ocienv", env.ocienv)
-
-	return env, 0
+type OCIEnvironment struct {
+	hEnv *OCIHandle
 }
 
-func Test() {
-	fmt.Println("Testing OCI")
-	a, b := ociEnvCreate()
-	fmt.Println("A", a)
-	fmt.Println("B", b)
+func OCIEnvCreate(mode uint32) (handle *OCIEnvironment, err error) {
+	var e *OCIEnvironment = new(OCIEnvironment) // Environment handle
+	e.t = OCI_HTYPE_ENV
+
+	r0, _, e1 := procOCIEnvCreate.Call( // sword OCIEnvCreate   (
+		uintptr(unsafe.Pointer(&e.hEnv.h)), // OCIEnv        **envhpp,
+		uintptr(mode),                        // ub4           mode,
+		uintptr(0),                           // CONST dvoid   *ctxp,
+		uintptr(0),                           // CONST dvoid   *(*malocfp) (dvoid *ctxp, size_t size),
+		uintptr(0),                           // CONST dvoid   *(*ralocfp) (dvoid *ctxp, dvoid *memptr, size_t newsize),
+		uintptr(0),                           // CONST void    (*mfreefp) (dvoid *ctxp, dvoid *memptr))
+		uintptr(0),                           // size_t        xtramemsz,
+		uintptr(0))                           // dvoid         **usrmempp );
+
+	if r0 != 0 {
+		return nil, error(e1)
+	}
+	return e, nil
+}
+
+func OCIHandleFree(handle *OCIHandle) (err error) {
+	r0, _, e1 := procOCIHandleFree.Call(handle.h, uintptr(handle.t))
+	if r0 != 0 {
+		err = error(e1)
+	} else {
+		err = nil
+	}
+	return
+}
+
+func OCILogon(env *OCIHandle) (svcctx *OCIHandle, err error) {
+	var ocierr uint
+	var s *OCIHandle = new (OCIHandle) // Service context
+	s.t = OCI_HTYPE_SVCCTX
+
+	r0, _, e1 := procOCILogon.Call( // sword OCILogon (
+		env.h, // OCIEnv          *envhp,
+		uintptr(unsafe.Pointer(&ocierr)), //                 OCIError        *errhp,
+		uintptr(0),                       //                 OCISvcCtx       **svchp,
+		uintptr(0),                       //                 CONST OraText   *username,
+		uintptr(0),                       //                 ub4             uname_len,
+		uintptr(0),                       //                 CONST OraText   *password,
+		uintptr(0),                       //                 ub4             passwd_len,
+		uintptr(0),                       //                 CONST OraText   *dbname,
+		uintptr(0))                       //                 ub4             dbname_len );
+
+	if r0 != 0 {
+		return nil, error(e1)
+	}
+	return s, nil
 }
