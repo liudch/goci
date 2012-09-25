@@ -272,26 +272,22 @@ var (
 
 type OCIHandle struct {
 	h uintptr // Handle
-	t   uint  // Handle type
+	t uint    // Handle type
 }
 
-type OCIEnvironment struct {
-	hEnv *OCIHandle
-}
-
-func OCIEnvCreate(mode uint32) (handle *OCIEnvironment, err error) {
-	var e *OCIEnvironment = new(OCIEnvironment) // Environment handle
+func OCIEnvCreate(mode uint32) (henv *OCIHandle, err error) {
+	var e *OCIHandle = new(OCIHandle) // Environment handle
 	e.t = OCI_HTYPE_ENV
 
 	r0, _, e1 := procOCIEnvCreate.Call( // sword OCIEnvCreate   (
-		uintptr(unsafe.Pointer(&e.hEnv.h)), // OCIEnv        **envhpp,
-		uintptr(mode),                        // ub4           mode,
-		uintptr(0),                           // CONST dvoid   *ctxp,
-		uintptr(0),                           // CONST dvoid   *(*malocfp) (dvoid *ctxp, size_t size),
-		uintptr(0),                           // CONST dvoid   *(*ralocfp) (dvoid *ctxp, dvoid *memptr, size_t newsize),
-		uintptr(0),                           // CONST void    (*mfreefp) (dvoid *ctxp, dvoid *memptr))
-		uintptr(0),                           // size_t        xtramemsz,
-		uintptr(0))                           // dvoid         **usrmempp );
+		uintptr(unsafe.Pointer(&e.h)), // OCIEnv        **envhpp,
+		uintptr(mode),                 // ub4           mode,
+		0,                             // CONST dvoid   *ctxp,
+		0,                             // CONST dvoid   *(*malocfp) (dvoid *ctxp, size_t size),
+		0,                             // CONST dvoid   *(*ralocfp) (dvoid *ctxp, dvoid *memptr, size_t newsize),
+		0,                             // CONST void    (*mfreefp) (dvoid *ctxp, dvoid *memptr))
+		0,                             // size_t        xtramemsz,
+		0)                             // dvoid         **usrmempp );
 
 	if r0 != 0 {
 		return nil, error(e1)
@@ -300,7 +296,9 @@ func OCIEnvCreate(mode uint32) (handle *OCIEnvironment, err error) {
 }
 
 func OCIHandleFree(handle *OCIHandle) (err error) {
-	r0, _, e1 := procOCIHandleFree.Call(handle.h, uintptr(handle.t))
+	r0, _, e1 := procOCIHandleFree.Call( // sword OCIHandleFree (
+		handle.h,          // dvoid     *hndlp,
+		uintptr(handle.t)) // ub4       type );
 	if r0 != 0 {
 		err = error(e1)
 	} else {
@@ -309,24 +307,27 @@ func OCIHandleFree(handle *OCIHandle) (err error) {
 	return
 }
 
-func OCILogon(env *OCIHandle) (svcctx *OCIHandle, err error) {
-	var ocierr uint
-	var s *OCIHandle = new (OCIHandle) // Service context
+func OCILogon(env *OCIHandle, username, password, database string) (svcctx *OCIHandle, err error) {
+	var s *OCIHandle = new(OCIHandle) // Service context
 	s.t = OCI_HTYPE_SVCCTX
+	var e *OCIHandle = new(OCIHandle) // Error handle
+	e.t = OCI_HTYPE_ERROR
 
 	r0, _, e1 := procOCILogon.Call( // sword OCILogon (
 		env.h, // OCIEnv          *envhp,
-		uintptr(unsafe.Pointer(&ocierr)), //                 OCIError        *errhp,
-		uintptr(0),                       //                 OCISvcCtx       **svchp,
-		uintptr(0),                       //                 CONST OraText   *username,
-		uintptr(0),                       //                 ub4             uname_len,
-		uintptr(0),                       //                 CONST OraText   *password,
-		uintptr(0),                       //                 ub4             passwd_len,
-		uintptr(0),                       //                 CONST OraText   *dbname,
-		uintptr(0))                       //                 ub4             dbname_len );
+		uintptr(unsafe.Pointer(&e.h)),                               // OCIError        *errhp,
+		uintptr(unsafe.Pointer(&s.h)),                               // OCISvcCtx       **svchp,
+		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(username))), // CONST OraText   *username,
+		uintptr(len(username)),                                      // ub4             uname_len,
+		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(password))), // CONST OraText   *password,
+		uintptr(len(password)),                                      // ub4             passwd_len,
+		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(database))), // CONST OraText   *dbname,
+		uintptr(len(database)))                                      // ub4             dbname_len );
 
 	if r0 != 0 {
-		return nil, error(e1)
+		err = error(e1)
+		return
 	}
+
 	return s, nil
 }

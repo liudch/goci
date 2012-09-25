@@ -5,12 +5,24 @@ import (
 )
 
 func TestEnvCreation(t *testing.T) {
-	var h, e = OCIEnvCreate(OCI_DEFAULT)
+	var env, ctx *OCIHandle
+	var e error
+
+	env, e = OCIEnvCreate(OCI_DEFAULT)
 	if e != nil {
 		t.Error("OCIEnvCreate returned error")
 	}
 
-	if OCIHandleFree(h) != nil {
+	ctx, e = OCILogon(env, "goci", "goci", "GOCI")
+	if e != nil {
+		t.Error("OCILogon failed")
+	}
+
+	if OCIHandleFree(ctx) != nil {
+		t.Error("OCIHandleFree returned error")
+	}
+
+	if OCIHandleFree(env) != nil {
 		t.Error("OCIHandleFree returned error")
 	}
 }
